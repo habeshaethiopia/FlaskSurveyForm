@@ -37,7 +37,7 @@
         <form method="POST" action="{{ url_for('edit_form', form_id=form_id) }}" id="training-form"
             enctype="multipart/form-data">
             {% else %}
-            <form method="POST" action="{{ url_for('submit_form') }}" id="training-form" enctype="multipart/form-data">
+            <form method="POST" action="{{ url_for('submit') }}" id="training-form" enctype="multipart/form-data">
                 {% endif %}
                 {{ form.csrf_token }}
 
@@ -141,28 +141,50 @@
                                 <div class="row g-3">
                                     <div class="col-md-3">
                                         {{ form.travel_cost.label(class="form-label") }}
-                                        {{ form.travel_cost(class="form-control", placeholder="0.00") }}
+                                        {{ form.travel_cost(class="form-control expense-input", placeholder="0.00") }}
                                     </div>
                                     <div class="col-md-3">
                                         {{ form.food_cost.label(class="form-label") }}
-                                        {{ form.food_cost(class="form-control", placeholder="0.00") }}
+                                        {{ form.food_cost(class="form-control expense-input", placeholder="0.00") }}
                                     </div>
                                     <div class="col-md-3">
                                         {{ form.materials_cost.label(class="form-label") }}
-                                        {{ form.materials_cost(class="form-control", placeholder="0.00") }}
+                                        {{ form.materials_cost(class="form-control expense-input", placeholder="0.00")
+                                        }}
                                     </div>
                                     <div class="col-md-3">
                                         {{ form.other_cost.label(class="form-label") }}
-                                        {{ form.other_cost(class="form-control", placeholder="0.00") }}
+                                        {{ form.other_cost(class="form-control expense-input", placeholder="0.00") }}
                                     </div>
                                     <div class="col-md-12">
                                         {{ form.concur_claim.label(class="form-label") }}
-                                        {{ form.concur_claim(class="form-control", placeholder="Enter Concur claim number")
-                                        }}
+                                        {{ form.concur_claim(class="form-control", placeholder="Enter Concur claim
+                                        number") }}
+                                    </div>
+                                    <div id="other-cost-description-container" class="col-md-12 d-none">
+                                        {{ form.other_cost_description.label(class="form-label") }}
+                                        {{ form.other_cost_description(class="form-control", placeholder="Describe other
+                                        expenses") }}
                                     </div>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Training Description -->
+                        <div class="col-md-12 mb-3">
+                            {{ form.training_description.label(class="form-label") }}
+                            {{ form.training_description(class="form-control", rows=3) }}
+                            <div class="form-text">Briefly describe the training delivered</div>
+                        </div>
+
+                        <!-- Trainee Days -->
+                        <div class="col-md-6 mb-3">
+                            {{ form.trainee_days.label(class="form-label") }}
+                            {{ form.trainee_days(class="form-control", type="number", step="0.5", min="0") }}
+                            <div class="form-text">How much time the trainees spent at the training, in working days
+                            </div>
+                        </div>
+
                         {% if edit_mode and existing_attachments %}
                         <div class="mb-3">
                             <h5 class="fs-6">Existing Attachments</h5>
@@ -194,20 +216,24 @@
                             <div class="col-md-12">
                                 <h3 class="fs-5 border-bottom pb-2 mb-3">Attachments</h3>
                                 <div class="mb-3">
-                                    {{ form.attachments.label(class="form-label") }}
-                                    {{ form.attachments(class="form-control", multiple="multiple") }}
-                                    <small class="form-text text-muted">
-                                        Hold Ctrl/Cmd to select multiple files (Max 10MB each)
-                                    </small>
-                                </div>
-                                <div class="mb-3">
-                                    {{ form.attachment_descriptions.label(class="form-label") }}
-                                    {{ form.attachment_descriptions(class="form-control",
-                                    placeholder="Enter one description per line matching the file order",
-                                    rows=3) }}
-                                    <small class="form-text text-muted">
-                                        Describe each attachment in the order they were selected
-                                    </small>
+                                    <div class="dropzone-container p-4 border rounded text-center" id="dropzone">
+                                        <div class="dz-message">
+                                            <i class="bi bi-cloud-upload fs-1"></i>
+                                            <p class="mb-0">Drag and drop files here or click to browse</p>
+                                        </div>
+                                    </div>
+                                    <div id="attachments-list" class="mt-3">
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>Filename</th>
+                                                    <th>Description</th>
+                                                    <th>Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="attachments-table-body"></tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -246,6 +272,11 @@
                             {{ form.attendee_emails(class="form-control",
                             placeholder="Enter emails separated by commas or spaces",
                             rows=4) }}
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-secondary" id="add-emails-btn">
+                                    Add Emails to Trainees
+                                </button>
+                            </div>
                             <small class="form-text text-muted">
                                 Example: john@example.com, jane@domain.com
                             </small>
@@ -380,6 +411,174 @@
                     supplierName.focus();
                 }
             }
+        });
+
+        // Handle adding emails to trainees
+        document.getElementById('add-emails-btn').addEventListener('click', function () {
+            const emailsText = document.querySelector('#attendee_emails').value;
+            const emails = emailsText.split(/[,\s]+/).filter(email => email.trim());
+            const traineesList = document.getElementById('trainees-list');
+            const noTraineesMessage = document.getElementById('no-trainees-message');
+
+            emails.forEach(email => {
+                if (email.trim()) {
+                    // Check if email already exists
+                    const existingTrainee = trainees.find(t => t.email === email.trim());
+                    if (existingTrainee) {
+                        alert(`Trainee with email ${email} is already added.`);
+                        return;
+                    }
+
+                    // Add to trainees array
+                    trainees.push({
+                        email: email.trim(),
+                        name: email.split('@')[0], // Use part before @ as name
+                        department: 'Engineering' // Default department
+                    });
+
+                    // Create trainee item in UI
+                    const traineeDiv = document.createElement('div');
+                    traineeDiv.className = 'trainee-item mb-2 p-2 border rounded';
+                    traineeDiv.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${email.split('@')[0]}</strong><br>
+                                <small class="text-muted">${email}</small>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-danger remove-trainee" data-email="${email}">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        </div>
+                    `;
+                    traineesList.appendChild(traineeDiv);
+                    noTraineesMessage.style.display = 'none';
+                }
+            });
+
+            // Clear the input
+            document.querySelector('#attendee_emails').value = '';
+
+            // Update hidden trainees data
+            updateTraineesData();
+        });
+
+        // Handle removing trainees
+        document.addEventListener('click', function (e) {
+            if (e.target.closest('.remove-trainee')) {
+                const button = e.target.closest('.remove-trainee');
+                const email = button.getAttribute('data-email');
+                const traineeItem = button.closest('.trainee-item');
+
+                // Remove from trainees array
+                trainees = trainees.filter(t => t.email !== email);
+
+                // Remove from UI
+                traineeItem.remove();
+
+                // Show no trainees message if list is empty
+                if (trainees.length === 0) {
+                    document.getElementById('no-trainees-message').style.display = 'block';
+                }
+
+                // Update hidden trainees data
+                updateTraineesData();
+            }
+        });
+
+        // Initialize Dropzone
+        Dropzone.autoDiscover = false;
+        const myDropzone = new Dropzone("#dropzone", {
+            url: "{{ url_for('upload_attachment') }}",
+            paramName: "file",
+            maxFilesize: 10, // MB
+            acceptedFiles: ".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png,.txt",
+            addRemoveLinks: true,
+            dictDefaultMessage: "Drop files here or click to browse",
+            init: function () {
+                this.on("success", function (file, response) {
+                    if (response.success) {
+                        // Add file to the table
+                        const tbody = document.getElementById('attachments-table-body');
+                        const tr = document.createElement('tr');
+                        tr.setAttribute('data-filename', response.filename);
+                        tr.innerHTML = `
+                            <td>${response.filename}</td>
+                            <td>
+                                <input type="text" class="form-control form-control-sm" 
+                                       name="attachment_descriptions[]" 
+                                       placeholder="Add description">
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-danger remove-attachment" 
+                                        data-filename="${response.filename}">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+
+                        // Add hidden input for the file
+                        const hiddenInput = document.createElement('input');
+                        hiddenInput.type = 'hidden';
+                        hiddenInput.name = 'attachments[]';
+                        hiddenInput.value = response.filename;
+                        tr.appendChild(hiddenInput);
+                    }
+                });
+
+                this.on("removedfile", function (file) {
+                    // Remove file from the table
+                    const tr = document.querySelector(`tr[data-filename="${file.name}"]`);
+                    if (tr) tr.remove();
+                });
+
+                this.on("error", function (file, errorMessage) {
+                    if (typeof errorMessage === 'string') {
+                        alert(errorMessage);
+                    } else if (errorMessage.errors) {
+                        alert(errorMessage.errors.join('\n'));
+                    }
+                });
+            }
+        });
+
+        // Handle removing attachments
+        document.addEventListener('click', function (e) {
+            if (e.target.closest('.remove-attachment')) {
+                const button = e.target.closest('.remove-attachment');
+                const filename = button.getAttribute('data-filename');
+                const tr = button.closest('tr');
+
+                // Remove the file from Dropzone
+                const file = myDropzone.getAcceptedFiles().find(f => f.name === filename);
+                if (file) {
+                    myDropzone.removeFile(file);
+                }
+
+                // Remove the row from the table
+                tr.remove();
+            }
+        });
+
+        // Handle expense fields
+        document.querySelectorAll('.expense-input').forEach(input => {
+            input.addEventListener('change', function () {
+                const hasExpenses = Array.from(document.querySelectorAll('.expense-input'))
+                    .some(input => input.value && parseFloat(input.value) > 0);
+                const concurClaim = document.querySelector('#concur_claim');
+                concurClaim.required = hasExpenses;
+
+                // Show/hide other cost description
+                const otherCost = document.querySelector('#other_cost');
+                const otherCostDesc = document.querySelector('#other-cost-description-container');
+                if (otherCost.value && parseFloat(otherCost.value) > 0) {
+                    otherCostDesc.style.display = 'block';
+                    document.querySelector('#other_cost_description').required = true;
+                } else {
+                    otherCostDesc.style.display = 'none';
+                    document.querySelector('#other_cost_description').required = false;
+                }
+            });
         });
     });
 </script>
